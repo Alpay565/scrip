@@ -1,0 +1,236 @@
+function processEmails(sendEmails = true) {
+  const sheetName = "1_Total Provision"; // The sheet name
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+  const data = sheet.getDataRange().getValues();
+
+  const emailData = {};
+
+  // Define column positions (adjust based on your sheet)
+  const columns = {
+    email: 45, // Column "AS" (1-based index: AS = 45)
+    owner: 20, // Column "T" (Owner, 1-based index: T = 20)
+    groupProject: 32, // Column "AF" (Group Project, 1-based index: AF = 32)
+    material: 1, // Column "A" (Material Number, 1-based index: A = 1)
+    materialName: 2, // Column "B" (Material Name, 1-based index: B = 2)
+    provision: 37, // Column "AK" (Stock Depreciation Cost, 1-based index: AK = 37)
+    quantity: 9, // Column "I" (Quantity, 1-based index: I = 9)
+    layoutSaving: 42, // Column "AO" (Layout Saving, 1-based index: AO = 42)
+    targetMonth: 42, // Column "AP" (Hedef Ay, 1-based index: AP = 42)
+    comment2: 25, // Column "Y" (Comment2, 1-based index: Y = 25)
+    status: 30, // Column "AD" (Status, 1-based index: AD = 30)
+    pdcaPlan: 43, // Column "P" (PDCA Plan, 1-based index: P = 43)
+    pdcaDo: 44, // Column "Q" (PDCA Do, 1-based index: Q = 44)
+    pdcaCheck: 45, // Column "R" (PDCA Check, 1-based index: R = 45)
+    pdcaAct: 46 // Column "S" (PDCA Act, 1-based index: S = 46)
+  };
+
+  // Emojis in HTML Unicode format for the body
+  const projectEmojis = {
+    "ATLAS Sales": "&#127974;",       // Bank
+    "EB2 INDIA GEN3": "&#127470;&#127475;", // Indian Flag
+    "OPAR (Fuen)": "&#128295;",      // Hammer and Wrench
+    "E-Bike": "&#128690;",           // Bicycle
+    "HD Transfer": "&#128763;",      // New truck emoji
+    "ATLAS Fuen": "&#127466;&#127480;", // Spanish Flag
+    "Mould Localization": "&#127981;", // Construction
+    "Project": "&#128209;",          // Folder
+    "Alternative Usage": "&#9851;",  // Recycling
+    "Order Received": "&#128188;",   // Briefcase
+    "4M Remains": "&#128119;",       // Construction Worker
+    "Marking Change": "&#9997;",     // Writing Hand
+    "Return to Amiens": "&#128666;", // Delivery truck
+    "MUSTANG": "&#128052;",          // Horse
+    "Other": "&#128270;",            // Magnifying Glass
+    "Pendulum HR10": "&#9881;",      // Gear
+    "Quality Prison": "&#128274;",   // Lock
+    "Scrap": "&#128465;",            // Wastebasket
+    "Fiat DBV PPCA": "&#128663;"     // Car
+  };
+
+  const sheetUrl = sheet.getParent().getUrl(); // Get the spreadsheet URL
+
+  // Group rows by owner and group project
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const email = row[columns.email - 1];
+    const owner = row[columns.owner - 1];
+    const groupProject = row[columns.groupProject - 1];
+
+    if (!email || !owner || !groupProject) continue; // Skip rows with missing data
+
+    const key = `${owner}-${groupProject}`;
+    if (!emailData[key]) {
+      emailData[key] = { email, owner, groupProject, references: [], totalProvision: 0, totalLayoutSaving: 0 };
+    }
+
+    // Add row data to references
+    emailData[key].references.push({
+      material: row[columns.material - 1],
+      materialName: row[columns.materialName - 1],
+      provision: Math.round(row[columns.provision - 1]) || 0, // Round to the nearest integer
+      quantity: Math.round(row[columns.quantity - 1]) || 0,   // Round to the nearest integer
+      layoutSaving: Math.round(row[columns.layoutSaving - 1]) || 0, // Round to the nearest integer
+      targetMonth: row[columns.targetMonth - 1] || "-", // Display Hedef Ay as it appears
+      comment2: row[columns.comment2 - 1] || "-",
+      status: row[columns.status - 1] || "-",
+      pdcaStatus: getPdcaStatus(row, columns),
+      rowLink: `${sheetUrl}#gid=${sheet.getSheetId()}&range=A${i + 1}` // Link to the specific row
+    });
+
+    // Update totals
+    emailData[key].totalProvision += Math.round(row[columns.provision - 1]) || 0;
+    emailData[key].totalLayoutSaving += Math.round(row[columns.layoutSaving - 1]) || 0;
+  }
+
+  // Process and send emails
+  for (const key in emailData) {
+    const { email, owner, groupProject, references, totalProvision, totalLayoutSaving } = emailData[key];
+
+    // Sort references by provision in descending order
+    references.sort((a, b) => b.provision - a.provision);
+
+    // Generate the email content
+    const greeting = determineGreeting(owner);
+    const emoji = projectEmojis[groupProject] || "&#128230;"; // Default: Mailbox
+    const body = generateEmailBodyWithTables(
+      greeting,
+      `${emoji} ${groupProject}`,
+      references,
+      totalProvision,
+      totalLayoutSaving
+    );
+
+    // Add only the recycling emoji ♻️ in Unicode format to the subject
+    const subject = `♻️ ${groupProject} / Stock Depreciation Action`;
+
+    if (sendEmails) {
+      GmailApp.sendEmail(email, subject, "", { htmlBody: body });
+      Logger.log(`Email sent to: ${email}`);
+    } else {
+      Logger.log(`--- Simulated Email ---`);
+      Logger.log(`To: ${email}`);
+      Logger.log(`Subject: ${subject}`);
+      Logger.log(`Body:\n${body}`);
+    }
+  }
+}
+
+function generateEmailBodyWithTables(greeting, groupProject, references, totalProvision, totalLayoutSaving) {
+  // Separate ongoing and completed references
+  const ongoingReferences = references.filter(ref => ["Plan", "Do", "Check"].includes(ref.pdcaStatus));
+  const completedReferences = references.filter(ref => ref.pdcaStatus === "Act");
+
+  // Simplified email text
+  let body = `
+    <p>${greeting}</p>
+    <p><b>${groupProject}</b> grubu ürünlerin yönetimi için sizin liderliğinizde çalışmaları takip etmek istiyoruz. Katkılarınız için şimdiden teşekkür ederiz.</p>
+    <p>Aksiyonları tamamladığınızda, lütfen dosyada <b>R sütunundaki Check kutucuğunu</b> işaretlemeyi unutmayınız &#9989;.</p>
+    <p>Sorularınız ya da desteğe ihtiyaç duyduğunuz bir konu olursa, bana her zaman ulaşabilirsiniz &#128222;. Süreci birlikte başarıyla yöneteceğimizden eminim &#128588;.</p>`;
+
+  // Add Ongoing Actions Table in Turkish
+  body += generateHtmlTable("Devam Eden Aksiyonlar", "#CCE5FF", ongoingReferences);
+
+  // Add space and Completed Actions Table in Turkish
+  body += `<br><hr><br>`; // Add separation between tables
+  body += generateHtmlTable("Tamamlanmış Aksiyonlar", "#D9F2D9", completedReferences);
+
+  // Add totals with correct emojis before the text
+  body += `<p>&#128184; Toplam Stok Maliyeti: <b>${totalProvision} k€</b></p>`; // Money with wings emoji
+  body += `<p>&#128230; Toplam Alan Tasarrufu: <b>${totalLayoutSaving} m²</b></p>`; // Box emoji
+
+  return body;
+}
+
+function generateHtmlTable(title, color, references) {
+  let table = `
+    <table border="1" style="border-collapse: collapse; width: 100%; font-size: 12px;">
+      <tr style="background-color: ${color}; color: black; font-weight: bold; text-align: center;">
+        <td colspan="10">${title}</td>
+      </tr>
+      <tr style="background-color: #f2f2f2;">
+        <th>#</th>
+        <th>Referans</th>
+        <th>Ürün Adı</th>
+        <th>Stok Maliyeti (k€)</th>
+        <th>Toplam Adet</th>
+        <th>Hedef Ay</th>
+        <th>Ön Analiz Yorumu</th>
+        <th>Durum</th>
+        <th>PDCA</th>
+        <th>Satır Linki</th>
+      </tr>`;
+
+  if (references.length > 0) {
+    references.forEach((ref, index) => {
+      const pdcaBgColor = getPdcaBackgroundColor(ref.pdcaStatus); // Get background color for PDCA status
+      table += `
+        <tr>
+          <td>${index + 1}</td>
+          <td>${ref.material}</td>
+          <td>${ref.materialName}</td>
+          <td>${ref.provision}</td>
+          <td>${ref.quantity}</td>
+          <td>${ref.targetMonth}</td>
+          <td>${ref.comment2}</td>
+          <td>${ref.status}</td>
+          <td style="background-color: ${pdcaBgColor}; color: black; font-weight: bold;">${ref.pdcaStatus}</td>
+          <td><a href="${ref.rowLink}" target="_blank">Link</a></td>
+        </tr>`;
+    });
+  } else {
+    table += `
+      <tr>
+        <td colspan="10" style="text-align: center; color: gray;">No references available</td>
+      </tr>`;
+  }
+
+  table += `</table>`;
+  return table;
+}
+
+function getPdcaBackgroundColor(pdcaStatus) {
+  switch (pdcaStatus) {
+    case "Plan": return "#FFFFFF"; // White
+    case "Do": return "#FFD966"; // Light Orange
+    case "Check": return "#D9A6A6"; // Soft Brown
+    case "Act": return "#A8D08D"; // Light Green
+    default: return "#F2F2F2"; // Light Gray for default
+  }
+}
+
+function determineGreeting(owner) {
+  const fullNameMatches = {
+    "Mehmet Yiğit": "Mehmet Bey Merhaba,"
+  };
+
+  const maleNames = [
+    "Ahmet", "Koray", "Caner", "Derya", "Erman", "Günay", "Gürsan", "İrfan", "Kadir",
+    "Kamil", "Kemal", "Murat", "Mustafa", "Resül", "Ruşen", "Samet", "Selamettin",
+    "Semih", "Serdar", "Serhad", "Serhat", "Taha", "Tolga", "Volkan", "Yaşar",
+    "Yasin", "Cem", "Alpay", "Mehmet", "Yiğit"
+  ];
+
+  const femaleNames = [
+    "Basma", "Begüm", "Beril", "Hale", "Melis", "Sinem", "Tuğba"
+  ];
+
+  const trimmedOwner = owner.trim();
+  if (fullNameMatches[trimmedOwner]) {
+    return fullNameMatches[trimmedOwner];
+  }
+
+  const firstName = trimmedOwner.split(" ")[0];
+  if (maleNames.includes(firstName)) return `${firstName} Bey Merhaba,`;
+  if (femaleNames.includes(firstName)) return `${firstName} Hanım Merhaba,`;
+
+  Logger.log(`Unable to determine gender for: ${owner}`);
+  return `${firstName} Merhaba,`;
+}
+
+function getPdcaStatus(row, columns) {
+  if (row[columns.pdcaPlan - 1]) return "Plan";
+  if (row[columns.pdcaDo - 1]) return "Do";
+  if (row[columns.pdcaCheck - 1]) return "Check";
+  if (row[columns.pdcaAct - 1]) return "Act";
+  return "-";
+}
