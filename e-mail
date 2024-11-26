@@ -8,6 +8,7 @@ function processEmails(sendEmails = true) {
   // Define column positions (adjust based on your sheet)
   const columns = {
     email: 45, // Column "AS" (1-based index: AS = 45)
+    ccEmail: 46, // Column "AT" (CC email addresses, 1-based index: AT = 46)
     owner: 20, // Column "T" (Owner, 1-based index: T = 20)
     groupProject: 32, // Column "AF" (Group Project, 1-based index: AF = 32)
     material: 1, // Column "A" (Material Number, 1-based index: A = 1)
@@ -53,6 +54,7 @@ function processEmails(sendEmails = true) {
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
     const email = row[columns.email - 1];
+    const ccEmail = row[columns.ccEmail - 1]; // CC email address from column "AT"
     const owner = row[columns.owner - 1];
     const groupProject = row[columns.groupProject - 1];
 
@@ -60,7 +62,7 @@ function processEmails(sendEmails = true) {
 
     const key = `${owner}-${groupProject}`;
     if (!emailData[key]) {
-      emailData[key] = { email, owner, groupProject, references: [], totalProvision: 0, totalLayoutSaving: 0 };
+      emailData[key] = { email, ccEmail, owner, groupProject, references: [], totalProvision: 0, totalLayoutSaving: 0 };
     }
 
     // Add row data to references
@@ -84,7 +86,7 @@ function processEmails(sendEmails = true) {
 
   // Process and send emails
   for (const key in emailData) {
-    const { email, owner, groupProject, references, totalProvision, totalLayoutSaving } = emailData[key];
+    const { email, ccEmail, owner, groupProject, references, totalProvision, totalLayoutSaving } = emailData[key];
 
     // Sort references by provision in descending order
     references.sort((a, b) => b.provision - a.provision);
@@ -104,11 +106,12 @@ function processEmails(sendEmails = true) {
     const subject = `♻️ ${groupProject} / Stock Depreciation Action`;
 
     if (sendEmails) {
-      GmailApp.sendEmail(email, subject, "", { htmlBody: body });
-      Logger.log(`Email sent to: ${email}`);
+      GmailApp.sendEmail(email, subject, "", { htmlBody: body, cc: ccEmail });
+      Logger.log(`Email sent to: ${email}, CC: ${ccEmail}`);
     } else {
       Logger.log(`--- Simulated Email ---`);
       Logger.log(`To: ${email}`);
+      Logger.log(`CC: ${ccEmail}`);
       Logger.log(`Subject: ${subject}`);
       Logger.log(`Body:\n${body}`);
     }
@@ -124,8 +127,9 @@ function generateEmailBodyWithTables(greeting, groupProject, references, totalPr
   let body = `
     <p>${greeting}</p>
     <p><b>${groupProject}</b> grubu ürünlerin yönetimi için sizin liderliğinizde çalışmaları takip etmek istiyoruz. Katkılarınız için şimdiden teşekkür ederiz.</p>
-    <p>Aksiyonları tamamladığınızda, lütfen dosyada <b>R sütunundaki Check kutucuğunu</b> işaretlemeyi unutmayınız &#9989;.</p>
-    <p>Sorularınız ya da desteğe ihtiyaç duyduğunuz bir konu olursa, bana her zaman ulaşabilirsiniz &#128222;. Süreci birlikte başarıyla yöneteceğimizden eminim &#128588;.</p>`;
+    <p>Her aksiyon tamamlandığında <b>PDCA döngüsünde ilgili adıma ait kutucuğu işaretleyerek</b> tüm sürecin takibini kolaylaştırabilirsiniz &#9989;.</p>
+    <p>Sorularınız ya da desteğe ihtiyaç duyduğunuz bir konu olursa, bana her zaman ulaşabilirsiniz &#128222;. Süreci birlikte başarıyla yöneteceğimizden eminim &#128588;.</p>
+    <p>Güncel data aşağıda yer almaktadır:</p>`;
 
   // Add Ongoing Actions Table in Turkish
   body += generateHtmlTable("Devam Eden Aksiyonlar", "#CCE5FF", ongoingReferences);
