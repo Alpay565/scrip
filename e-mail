@@ -1,3 +1,16 @@
+// Emojis for each solution (in HTML Unicode format for email body)
+const solutionEmojis = {
+  "Return to Supplier": "&#128666;", // Truck emoji
+  "Stock Transfer": "&#128230;", // File box emoji
+  "Rework": "&#128295;", // Hammer and wrench emoji
+  "Design Adaptation": "&#128736;", // Compass emoji
+  "Scrap": "&#128465;", // Wastebasket emoji
+  "Sales Campaign": "&#128176;", // Money bag emoji
+  "Adjust": "&#9881;", // Gear emoji
+  "Sell to Another Site": "&#128178;", // Dollar emoji
+  "Return to Fuen": "&#128506;" // Factory emoji
+};
+
 function processEmails(sendEmails = true) {
   const sheetName = "1_Total Provision"; // The sheet name
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
@@ -15,7 +28,7 @@ function processEmails(sendEmails = true) {
     materialName: 2, // Column "B" (Material Name, 1-based index: B = 2)
     provision: 37, // Column "AK" (Stock Depreciation Cost, 1-based index: AK = 37)
     quantity: 9, // Column "I" (Quantity, 1-based index: I = 9)
-    layoutSaving: 42, // Column "AO" (Layout Saving, 1-based index: AO = 42)
+    layoutSaving: 36, // Column "AO" (Layout Saving, 1-based index: AO = 36)
     solution: 24, // Column "X" (Solution, 1-based index: X = 24)
     comment2: 25, // Column "Y" (Comment2, 1-based index: Y = 25)
     status: 30, // Column "AD" (Status, 1-based index: AD = 30)
@@ -23,19 +36,6 @@ function processEmails(sendEmails = true) {
     pdcaDo: 44, // Column "Q" (PDCA Do, 1-based index: Q = 44)
     pdcaCheck: 45, // Column "R" (PDCA Check, 1-based index: R = 45)
     pdcaAct: 46 // Column "S" (PDCA Act, 1-based index: S = 46)
-  };
-
-  // Emojis for each solution (in HTML Unicode format for email body)
-  const solutionEmojis = {
-    "Return to Supplier": "&#128666;", // Truck emoji
-    "Stock Transfer": "&#128230;", // File box emoji
-    "Rework": "&#128295;", // Hammer and wrench emoji
-    "Design Adaptation": "&#128736;", // Compass emoji
-    "Scrap": "&#128465;", // Wastebasket emoji
-    "Sales Campaign": "&#128176;", // Money bag emoji
-    "Adjust": "&#9881;", // Gear emoji
-    "Sell to Another Site": "&#128178;", // Dollar emoji
-    "Return to Fuen": "&#128506;" // Factory emoji
   };
 
   const sheetUrl = sheet.getParent().getUrl(); // Get the spreadsheet URL
@@ -57,21 +57,22 @@ function processEmails(sendEmails = true) {
     }
 
     // Add row data to references
+    const layoutSaving = Math.round(row[columns.layoutSaving - 1]) || 0; // Fetch Layout Saving (Column AO)
     emailData[key].references.push({
       material: row[columns.material - 1],
       materialName: row[columns.materialName - 1],
       provision: Math.round(row[columns.provision - 1]) || 0, // Round to the nearest integer
       quantity: Math.round(row[columns.quantity - 1]) || 0,   // Round to the nearest integer
-      groupName: groupName || "-", // Replace Hedef Ay with Group Name
+      groupName: groupName || "-",
       comment2: row[columns.comment2 - 1] || "-",
       status: row[columns.status - 1] || "-",
       pdcaStatus: getPdcaStatus(row, columns),
-      rowLink: `${sheetUrl}#gid=${sheet.getSheetId()}&range=A${i + 1}` // Link to the specific row
+      rowLink: `${sheetUrl}#gid=${sheet.getSheetId()}&range=A${i + 1}`
     });
 
     // Update totals
     emailData[key].totalProvision += Math.round(row[columns.provision - 1]) || 0;
-    emailData[key].totalLayoutSaving += Math.round(row[columns.layoutSaving - 1]) || 0;
+    emailData[key].totalLayoutSaving += layoutSaving;
   }
 
   // Process and send emails
@@ -81,18 +82,16 @@ function processEmails(sendEmails = true) {
     // Sort references by provision in descending order
     references.sort((a, b) => b.provision - a.provision);
 
-    // Get emoji for the solution, or use a default if missing
-    const solutionEmoji = solutionEmojis[solution] || "&#128230;"; // Default: Box emoji
+    const solutionEmoji = solutionEmojis[solution] || "&#128230;";
     const greeting = determineGreeting(owner);
     const body = generateEmailBodyWithTables(
       greeting,
-      `${solutionEmoji} ${solution}`, // Solution with emoji in body
+      `${solutionEmoji} ${solution}`,
       references,
       totalProvision,
       totalLayoutSaving
     );
 
-    // Subject with only the recycling emoji (♻️)
     const subject = `♻️ ${solution} / Stock Depreciation Action`;
 
     if (sendEmails) {
@@ -108,11 +107,9 @@ function processEmails(sendEmails = true) {
   }
 }
 
-function generateEmailBodyWithTables(greeting, solution, references, totalProvision, totalLayoutSaving) {
-  // Separate ongoing and completed references
-  const ongoingReferences = references.filter(ref => ["Plan", "Do", "Check"].includes(ref.pdcaStatus));
-  const completedReferences = references.filter(ref => ref.pdcaStatus === "Act");
 
+
+function generateEmailBodyWithTables(greeting, solution, references, totalProvision, totalLayoutSaving) {
   let body = `
     <p>${greeting}</p>
     <p><b>${solution}</b> grubu ürünlerin yönetimi için sizin liderliğinizde çalışmaları takip etmek istiyoruz. Katkılarınız için şimdiden teşekkür ederiz.</p>
@@ -120,19 +117,16 @@ function generateEmailBodyWithTables(greeting, solution, references, totalProvis
     <p>Sorularınız ya da desteğe ihtiyaç duyduğunuz bir konu olursa, bana her zaman ulaşabilirsiniz &#128222;. Süreci birlikte başarıyla yöneteceğimizden eminim &#128588;.</p>
     <p>Güncel data aşağıda yer almaktadır:</p>`;
 
-  // Add Ongoing Actions Table in Turkish
-  body += generateHtmlTable("Devam Eden Aksiyonlar", "#CCE5FF", ongoingReferences);
+  // Generate a single consolidated table for all references
+  body += generateHtmlTable("Tüm Aksiyonlar", "#CCE5FF", references);
 
-  // Add space and Completed Actions Table in Turkish
-  body += `<br><hr><br>`;
-  body += generateHtmlTable("Tamamlanmış Aksiyonlar", "#D9F2D9", completedReferences);
-
-  // Add totals with correct emojis before the text
-  body += `<p>&#128184; Toplam Stok Maliyeti: <b>${totalProvision} k€</b></p>`; // Money with wings emoji
-  body += `<p>&#128230; Toplam Alan Tasarrufu: <b>${totalLayoutSaving} m²</b></p>`; // Box emoji
+  // Add totals with emojis
+  body += `<p>&#128184; Toplam Stok Maliyeti: <b>${totalProvision} k€</b></p>`;
+  body += `<p>&#128230; Toplam Alan Tasarrufu: <b>${totalLayoutSaving} m²</b></p>`;
 
   return body;
 }
+
 
 function generateHtmlTable(title, color, references) {
   let table = `
