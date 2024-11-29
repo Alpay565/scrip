@@ -10,13 +10,13 @@ function processEmails(sendEmails = true) {
     email: 45, // Column "AS" (1-based index: AS = 45)
     ccEmail: 46, // Column "AT" (CC email addresses, 1-based index: AT = 46)
     owner: 20, // Column "T" (Owner, 1-based index: T = 20)
-    groupProject: 32, // Column "AF" (Group Project, 1-based index: AF = 32)
+    groupName: 32, // Column "AF" (Group Name, 1-based index: AF = 32)
     material: 1, // Column "A" (Material Number, 1-based index: A = 1)
     materialName: 2, // Column "B" (Material Name, 1-based index: B = 2)
     provision: 37, // Column "AK" (Stock Depreciation Cost, 1-based index: AK = 37)
     quantity: 9, // Column "I" (Quantity, 1-based index: I = 9)
     layoutSaving: 42, // Column "AO" (Layout Saving, 1-based index: AO = 42)
-    targetMonth: 42, // Column "AP" (Hedef Ay, 1-based index: AP = 42)
+    solution: 24, // Column "X" (Solution, 1-based index: X = 24)
     comment2: 25, // Column "Y" (Comment2, 1-based index: Y = 25)
     status: 30, // Column "AD" (Status, 1-based index: AD = 30)
     pdcaPlan: 43, // Column "P" (PDCA Plan, 1-based index: P = 43)
@@ -25,44 +25,35 @@ function processEmails(sendEmails = true) {
     pdcaAct: 46 // Column "S" (PDCA Act, 1-based index: S = 46)
   };
 
-  // Emojis in HTML Unicode format for the body
-  const projectEmojis = {
-    "ATLAS Sales": "&#127974;",       // Bank
-    "EB2 INDIA GEN3": "&#127470;&#127475;", // Indian Flag
-    "OPAR (Fuen)": "&#128295;",      // Hammer and Wrench
-    "E-Bike": "&#128690;",           // Bicycle
-    "HD Transfer": "&#128763;",      // New truck emoji
-    "ATLAS Fuen": "&#127466;&#127480;", // Spanish Flag
-    "Mould Localization": "&#127981;", // Construction
-    "Project": "&#128209;",          // Folder
-    "Alternative Usage": "&#9851;",  // Recycling
-    "Order Received": "&#128188;",   // Briefcase
-    "4M Remains": "&#128119;",       // Construction Worker
-    "Marking Change": "&#9997;",     // Writing Hand
-    "Return to Amiens": "&#128666;", // Delivery truck
-    "MUSTANG": "&#128052;",          // Horse
-    "Other": "&#128270;",            // Magnifying Glass
-    "Pendulum HR10": "&#9881;",      // Gear
-    "Quality Prison": "&#128274;",   // Lock
-    "Scrap": "&#128465;",            // Wastebasket
-    "Fiat DBV PPCA": "&#128663;"     // Car
+  // Emojis for each solution (in HTML Unicode format for email body)
+  const solutionEmojis = {
+    "Return to Supplier": "&#128666;", // Truck emoji
+    "Stock Transfer": "&#128230;", // File box emoji
+    "Rework": "&#128295;", // Hammer and wrench emoji
+    "Design Adaptation": "&#128736;", // Compass emoji
+    "Scrap": "&#128465;", // Wastebasket emoji
+    "Sales Campaign": "&#128176;", // Money bag emoji
+    "Adjust": "&#9881;", // Gear emoji
+    "Sell to Another Site": "&#128178;", // Dollar emoji
+    "Return to Fuen": "&#128506;" // Factory emoji
   };
 
   const sheetUrl = sheet.getParent().getUrl(); // Get the spreadsheet URL
 
-  // Group rows by owner and group project
+  // Group rows by owner and solution
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
     const email = row[columns.email - 1];
     const ccEmail = row[columns.ccEmail - 1]; // CC email address from column "AT"
     const owner = row[columns.owner - 1];
-    const groupProject = row[columns.groupProject - 1];
+    const solution = row[columns.solution - 1]?.replace(/^\d+-/, "").trim(); // Remove numbers like "1-" from solutions
+    const groupName = row[columns.groupName - 1]; // Group Name from Column "AF"
 
-    if (!email || !owner || !groupProject) continue; // Skip rows with missing data
+    if (!email || !owner || !solution) continue; // Skip rows with missing data
 
-    const key = `${owner}-${groupProject}`;
+    const key = `${owner}-${solution}`;
     if (!emailData[key]) {
-      emailData[key] = { email, ccEmail, owner, groupProject, references: [], totalProvision: 0, totalLayoutSaving: 0 };
+      emailData[key] = { email, ccEmail, owner, solution, references: [], totalProvision: 0, totalLayoutSaving: 0 };
     }
 
     // Add row data to references
@@ -71,8 +62,7 @@ function processEmails(sendEmails = true) {
       materialName: row[columns.materialName - 1],
       provision: Math.round(row[columns.provision - 1]) || 0, // Round to the nearest integer
       quantity: Math.round(row[columns.quantity - 1]) || 0,   // Round to the nearest integer
-      layoutSaving: Math.round(row[columns.layoutSaving - 1]) || 0, // Round to the nearest integer
-      targetMonth: row[columns.targetMonth - 1] || "-", // Display Hedef Ay as it appears
+      groupName: groupName || "-", // Replace Hedef Ay with Group Name
       comment2: row[columns.comment2 - 1] || "-",
       status: row[columns.status - 1] || "-",
       pdcaStatus: getPdcaStatus(row, columns),
@@ -86,24 +76,24 @@ function processEmails(sendEmails = true) {
 
   // Process and send emails
   for (const key in emailData) {
-    const { email, ccEmail, owner, groupProject, references, totalProvision, totalLayoutSaving } = emailData[key];
+    const { email, ccEmail, owner, solution, references, totalProvision, totalLayoutSaving } = emailData[key];
 
     // Sort references by provision in descending order
     references.sort((a, b) => b.provision - a.provision);
 
-    // Generate the email content
+    // Get emoji for the solution, or use a default if missing
+    const solutionEmoji = solutionEmojis[solution] || "&#128230;"; // Default: Box emoji
     const greeting = determineGreeting(owner);
-    const emoji = projectEmojis[groupProject] || "&#128230;"; // Default: Mailbox
     const body = generateEmailBodyWithTables(
       greeting,
-      `${emoji} ${groupProject}`,
+      `${solutionEmoji} ${solution}`, // Solution with emoji in body
       references,
       totalProvision,
       totalLayoutSaving
     );
 
-    // Add only the recycling emoji ♻️ in Unicode format to the subject
-    const subject = `♻️ ${groupProject} / Stock Depreciation Action`;
+    // Subject with only the recycling emoji (♻️)
+    const subject = `♻️ ${solution} / Stock Depreciation Action`;
 
     if (sendEmails) {
       GmailApp.sendEmail(email, subject, "", { htmlBody: body, cc: ccEmail });
@@ -118,15 +108,14 @@ function processEmails(sendEmails = true) {
   }
 }
 
-function generateEmailBodyWithTables(greeting, groupProject, references, totalProvision, totalLayoutSaving) {
+function generateEmailBodyWithTables(greeting, solution, references, totalProvision, totalLayoutSaving) {
   // Separate ongoing and completed references
   const ongoingReferences = references.filter(ref => ["Plan", "Do", "Check"].includes(ref.pdcaStatus));
   const completedReferences = references.filter(ref => ref.pdcaStatus === "Act");
 
-  // Simplified email text
   let body = `
     <p>${greeting}</p>
-    <p><b>${groupProject}</b> grubu ürünlerin yönetimi için sizin liderliğinizde çalışmaları takip etmek istiyoruz. Katkılarınız için şimdiden teşekkür ederiz.</p>
+    <p><b>${solution}</b> grubu ürünlerin yönetimi için sizin liderliğinizde çalışmaları takip etmek istiyoruz. Katkılarınız için şimdiden teşekkür ederiz.</p>
     <p>Her aksiyon tamamlandığında <b>PDCA döngüsünde ilgili adıma ait kutucuğu işaretleyerek</b> tüm sürecin takibini kolaylaştırabilirsiniz &#9989;.</p>
     <p>Sorularınız ya da desteğe ihtiyaç duyduğunuz bir konu olursa, bana her zaman ulaşabilirsiniz &#128222;. Süreci birlikte başarıyla yöneteceğimizden eminim &#128588;.</p>
     <p>Güncel data aşağıda yer almaktadır:</p>`;
@@ -135,7 +124,7 @@ function generateEmailBodyWithTables(greeting, groupProject, references, totalPr
   body += generateHtmlTable("Devam Eden Aksiyonlar", "#CCE5FF", ongoingReferences);
 
   // Add space and Completed Actions Table in Turkish
-  body += `<br><hr><br>`; // Add separation between tables
+  body += `<br><hr><br>`;
   body += generateHtmlTable("Tamamlanmış Aksiyonlar", "#D9F2D9", completedReferences);
 
   // Add totals with correct emojis before the text
@@ -157,7 +146,7 @@ function generateHtmlTable(title, color, references) {
         <th>Ürün Adı</th>
         <th>Stok Maliyeti (k€)</th>
         <th>Toplam Adet</th>
-        <th>Hedef Ay</th>
+        <th>Grup İsmi</th>
         <th>Ön Analiz Yorumu</th>
         <th>Durum</th>
         <th>PDCA</th>
@@ -174,7 +163,7 @@ function generateHtmlTable(title, color, references) {
           <td>${ref.materialName}</td>
           <td>${ref.provision}</td>
           <td>${ref.quantity}</td>
-          <td>${ref.targetMonth}</td>
+          <td>${ref.groupName}</td>
           <td>${ref.comment2}</td>
           <td>${ref.status}</td>
           <td style="background-color: ${pdcaBgColor}; color: black; font-weight: bold;">${ref.pdcaStatus}</td>
@@ -203,32 +192,9 @@ function getPdcaBackgroundColor(pdcaStatus) {
 }
 
 function determineGreeting(owner) {
-  const fullNameMatches = {
-    "Mehmet Yiğit": "Mehmet Bey Merhaba,"
-  };
-
-  const maleNames = [
-    "Ahmet", "Koray", "Caner", "Derya", "Erman", "Günay", "Gürsan", "İrfan", "Kadir",
-    "Kamil", "Kemal", "Murat", "Mustafa", "Resül", "Ruşen", "Samet", "Selamettin",
-    "Semih", "Serdar", "Serhad", "Serhat", "Taha", "Tolga", "Volkan", "Yaşar",
-    "Yasin", "Cem", "Alpay", "Mehmet", "Yiğit"
-  ];
-
-  const femaleNames = [
-    "Basma", "Begüm", "Beril", "Hale", "Melis", "Sinem", "Tuğba"
-  ];
-
   const trimmedOwner = owner.trim();
-  if (fullNameMatches[trimmedOwner]) {
-    return fullNameMatches[trimmedOwner];
-  }
-
   const firstName = trimmedOwner.split(" ")[0];
-  if (maleNames.includes(firstName)) return `${firstName} Bey Merhaba,`;
-  if (femaleNames.includes(firstName)) return `${firstName} Hanım Merhaba,`;
-
-  Logger.log(`Unable to determine gender for: ${owner}`);
-  return `${firstName} Merhaba,`;
+  return `${firstName} Bey Merhaba,`;
 }
 
 function getPdcaStatus(row, columns) {
