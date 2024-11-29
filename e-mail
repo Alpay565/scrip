@@ -1,133 +1,132 @@
-function processEmails(sendEmails = true) { 
-  const sheetName = "1_Total Provision";
+// Emojis for each solution (in HTML Unicode format for email body)
+const solutionEmojis = {
+  "Return to Supplier": "&#128666;", // Truck emoji
+  "Stock Transfer": "&#128230;", // File box emoji
+  "Rework": "&#128295;", // Hammer and wrench emoji
+  "Design Adaptation": "&#128736;", // Compass emoji
+  "Scrap": "&#128465;", // Wastebasket emoji
+  "Sales Campaign": "&#128176;", // Money bag emoji
+  "Adjust": "&#9881;", // Gear emoji
+  "Sell to Another Site": "&#128178;", // Dollar emoji
+  "Return to Fuen": "&#128506;" // Factory emoji
+};
+
+function processEmails(sendEmails = false) {
+  const sheetName = "1_Total Provision"; // The sheet name
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
   const data = sheet.getDataRange().getValues();
 
   const emailData = {};
 
+  // Define column positions (adjust based on your sheet)
   const columns = {
-    email: 45,
-    ccEmail: 46,
-    owner: 20,
-    groupName: 32,
-    material: 1,
-    materialName: 2,
-    provision: 37,
-    quantity: 9,
-    layoutSaving: 36, // Correct column for layout saving
-    solution: 24,
-    comment2: 25,
-    status: 30,
-    pdcaPlan: 43,
-    pdcaDo: 44,
-    pdcaCheck: 45,
-    pdcaAct: 46,
+    email: 45, // Column "AS" (1-based index: AS = 45)
+    ccEmail: 46, // Column "AT" (CC email addresses, 1-based index: AT = 46)
+    owner: 20, // Column "T" (Owner, 1-based index: T = 20)
+    groupName: 32, // Column "AF" (Group Name, 1-based index: AF = 32)
+    material: 1, // Column "A" (Material Number, 1-based index: A = 1)
+    materialName: 2, // Column "B" (Material Name, 1-based index: B = 2)
+    provision: 37, // Column "AK" (Stock Depreciation Cost, 1-based index: AK = 37)
+    quantity: 9, // Column "I" (Quantity, 1-based index: I = 9)
+    layoutSaving: 36, // Column "AO" (Layout Saving, 1-based index: AO = 36)
+    solution: 24, // Column "X" (Solution, 1-based index: X = 24)
+    comment2: 25, // Column "Y" (Comment2, 1-based index: Y = 25)
+    status: 30, // Column "AD" (Status, 1-based index: AD = 30)
+    pdcaPlan: 43, // Column "P" (PDCA Plan, 1-based index: P = 43)
+    pdcaDo: 44, // Column "Q" (PDCA Do, 1-based index: Q = 44)
+    pdcaCheck: 45, // Column "R" (PDCA Check, 1-based index: R = 45)
+    pdcaAct: 46 // Column "S" (PDCA Act, 1-based index: S = 46)
   };
 
-  const sheetUrl = sheet.getParent().getUrl();
+  const sheetUrl = sheet.getParent().getUrl(); // Get the spreadsheet URL
 
-  // Male and Female Names
-  const maleNames = [
-    "Ahmet", "Koray", "Caner", "Derya", "Erman", "Günay", "Gürsan", "İrfan", "Kadir",
-    "Kamil", "Kemal", "Murat", "Mustafa", "Resül", "Ruşen", "Samet", "Selamettin",
-    "Semih", "Serdar", "Serhad", "Serhat", "Taha", "Tolga", "Volkan", "Yaşar",
-    "Yasin", "Cem", "Alpay", "Mehmet", "Yiğit"
-  ];
-
-  const femaleNames = [
-    "Basma", "Begüm", "Beril", "Hale", "Melis", "Sinem", "Tuğba"
-  ];
-
+  // Group rows by owner and solution
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
     const email = row[columns.email - 1];
-    const ccEmail = row[columns.ccEmail - 1];
+    const ccEmail = row[columns.ccEmail - 1]; // CC email address from column "AT"
     const owner = row[columns.owner - 1];
-    const solution = row[columns.solution - 1]?.replace(/^\d+-/, "").trim();
-    const groupName = row[columns.groupName - 1];
+    const solution = row[columns.solution - 1]?.replace(/^\d+-/, "").trim(); // Remove numbers like "1-" from solutions
+    const groupName = row[columns.groupName - 1]; // Group Name from Column "AF"
 
-    if (!email || !owner || !solution) continue;
+    if (!email || !owner || !solution) continue; // Skip rows with missing data
 
     const key = `${owner}-${solution}`;
     if (!emailData[key]) {
-      emailData[key] = {
-        email,
-        ccEmail,
-        owner,
-        solution,
-        references: [],
-        totalProvision: 0, // Sum stock cost
-      };
+      emailData[key] = { email, ccEmail, owner, solution, references: [], totalProvision: 0, totalLayoutSaving: 0 };
     }
 
     // Add row data to references
+    const layoutSaving = Math.round(row[columns.layoutSaving - 1]) || 0; // Fetch Layout Saving (Column AO)
     emailData[key].references.push({
       material: row[columns.material - 1],
       materialName: row[columns.materialName - 1],
-      provision: Math.round(row[columns.provision - 1]) || 0,
-      quantity: Math.round(row[columns.quantity - 1]) || 0,
+      provision: Math.round(row[columns.provision - 1]) || 0, // Round to the nearest integer
+      quantity: Math.round(row[columns.quantity - 1]) || 0,   // Round to the nearest integer
       groupName: groupName || "-",
       comment2: row[columns.comment2 - 1] || "-",
       status: row[columns.status - 1] || "-",
       pdcaStatus: getPdcaStatus(row, columns),
-      rowLink: `${sheetUrl}#gid=${sheet.getSheetId()}&range=A${i + 1}`,
+      rowLink: `${sheetUrl}#gid=${sheet.getSheetId()}&range=A${i + 1}`
     });
 
     // Update totals
     emailData[key].totalProvision += Math.round(row[columns.provision - 1]) || 0;
-  } // End of data processing loop
+    emailData[key].totalLayoutSaving += layoutSaving;
+  }
 
+  // Process and send emails
   for (const key in emailData) {
-    const { email, ccEmail, owner, solution, references, totalProvision } = emailData[key];
+    const { email, ccEmail, owner, solution, references, totalProvision, totalLayoutSaving } = emailData[key];
+
+    // Sort references by provision in descending order
     references.sort((a, b) => b.provision - a.provision);
 
-    const greeting = determineGreeting(owner, maleNames, femaleNames);
+    const solutionEmoji = solutionEmojis[solution] || "&#128230;";
+    const greeting = determineGreeting(owner);
     const body = generateEmailBodyWithTables(
       greeting,
-      solution,
+      `${solutionEmoji} ${solution}`,
       references,
-      totalProvision
+      totalProvision,
+      totalLayoutSaving
     );
 
     const subject = `♻️ ${solution} / Stock Depreciation Action`;
 
     if (sendEmails) {
       GmailApp.sendEmail(email, subject, "", { htmlBody: body, cc: ccEmail });
+      Logger.log(`Email sent to: ${email}, CC: ${ccEmail}`);
     } else {
-      Logger.log(`Simulated email sent to: ${email}`);
+      Logger.log(`--- Simulated Email ---`);
+      Logger.log(`To: ${email}`);
+      Logger.log(`CC: ${ccEmail}`);
+      Logger.log(`Subject: ${subject}`);
+      Logger.log(`Body:\n${body}`);
     }
-  } // End of email sending loop
-} // End of processEmails function
+  }
+}
 
-function getPdcaStatus(row, columns) {
-  if (row[columns.pdcaPlan - 1]) return "Plan";
-  if (row[columns.pdcaDo - 1]) return "Do";
-  if (row[columns.pdcaCheck - 1]) return "Check";
-  if (row[columns.pdcaAct - 1]) return "Act";
-  return "-";
-} // End of getPdcaStatus function
 
-function determineGreeting(owner, maleNames, femaleNames) {
-  const trimmedOwner = owner.trim();
-  const firstName = trimmedOwner.split(" ")[0];
 
-  if (maleNames.includes(firstName)) return `${firstName} Bey Merhaba,`;
-  if (femaleNames.includes(firstName)) return `${firstName} Hanım Merhaba,`;
-
-  return `${firstName} Merhaba,`; // Default fallback
-} // End of determineGreeting function
-
-function generateEmailBodyWithTables(greeting, solution, references, totalProvision) {
+function generateEmailBodyWithTables(greeting, solution, references, totalProvision, totalLayoutSaving) {
   let body = `
     <p>${greeting}</p>
     <p><b>${solution}</b> grubu ürünlerin yönetimi için sizin liderliğinizde çalışmaları takip etmek istiyoruz. Katkılarınız için şimdiden teşekkür ederiz.</p>
     <p>Her aksiyon tamamlandığında <b>PDCA döngüsünde ilgili adıma ait kutucuğu işaretleyerek</b> tüm sürecin takibini kolaylaştırabilirsiniz &#9989;.</p>
     <p>Sorularınız ya da desteğe ihtiyaç duyduğunuz bir konu olursa, bana her zaman ulaşabilirsiniz &#128222;. Süreci birlikte başarıyla yöneteceğimizden eminim &#128588;.</p>
     <p>Güncel data aşağıda yer almaktadır:</p>`;
+
+  // Generate a single consolidated table for all references
   body += generateHtmlTable("Tüm Aksiyonlar", "#CCE5FF", references);
+
+  // Add totals with emojis
   body += `<p>&#128184; Toplam Stok Maliyeti: <b>${totalProvision} k€</b></p>`;
+  body += `<p>&#128230; Toplam Alan Tasarrufu: <b>${totalLayoutSaving} m²</b></p>`;
+
   return body;
-} // End of generateEmailBodyWithTables function
+}
+
 
 function generateHtmlTable(title, color, references) {
   let table = `
@@ -147,9 +146,10 @@ function generateHtmlTable(title, color, references) {
         <th>PDCA</th>
         <th>Satır Linki</th>
       </tr>`;
+
   if (references.length > 0) {
     references.forEach((ref, index) => {
-      const pdcaBgColor = getPdcaBackgroundColor(ref.pdcaStatus);
+      const pdcaBgColor = getPdcaBackgroundColor(ref.pdcaStatus); // Get background color for PDCA status
       table += `
         <tr>
           <td>${index + 1}</td>
@@ -165,21 +165,25 @@ function generateHtmlTable(title, color, references) {
         </tr>`;
     });
   } else {
-    table += `<tr><td colspan="10" style="text-align: center; color: gray;">No references available</td></tr>`;
+    table += `
+      <tr>
+        <td colspan="10" style="text-align: center; color: gray;">No references available</td>
+      </tr>`;
   }
+
   table += `</table>`;
   return table;
-} // End of generateHtmlTable function
+}
 
 function getPdcaBackgroundColor(pdcaStatus) {
   switch (pdcaStatus) {
-    case "Plan": return "#FFFFFF";
-    case "Do": return "#FFD966";
-    case "Check": return "#D9A6A6";
-    case "Act": return "#A8D08D";
-    default: return "#F2F2F2";
+    case "Plan": return "#FFFFFF"; // White
+    case "Do": return "#FFD966"; // Light Orange
+    case "Check": return "#D9A6A6"; // Soft Brown
+    case "Act": return "#A8D08D"; // Light Green
+    default: return "#F2F2F2"; // Light Gray for default
   }
-} // End of getPdcaBackgroundColor function
+}
 
 function determineGreeting(owner) {
   const trimmedOwner = owner.trim();
