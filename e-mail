@@ -99,7 +99,7 @@ function generateEmailBody(greeting, solution, rows, sheet, spreadsheetUrl) {
           <td style="padding: 8px; text-align: center; border: 1px solid #ddd; width: 110px;">${row.stockCost}</td>
           <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${row.totalQuantity || "N/A"}</td>
           <td style="padding: 8px; border: 1px solid #ddd;">${row.groupName || "N/A"}</td>
-          <td style="padding: 8px; border: 1px solid #ddd; width: 240px;">${row.analysisComment || "N/A"}</td>
+          <td style="padding: 8px; border: 1px solid #ddd; width: 300px;">${row.analysisComment || "N/A"}</td>
           <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${row.status || "N/A"}</td>
           <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${consumption}</td>
           <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${row.pdca || "N/A"}</td>
@@ -122,7 +122,7 @@ function generateEmailBody(greeting, solution, rows, sheet, spreadsheetUrl) {
           <td style="padding: 8px; text-align: center; border: 1px solid #ddd; width: 110px;">${row.stockCost}</td>
           <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${row.totalQuantity || "N/A"}</td>
           <td style="padding: 8px; border: 1px solid #ddd;">${row.groupName || "N/A"}</td>
-          <td style="padding: 8px; border: 1px solid #ddd; width: 240px;">${row.analysisComment || "N/A"}</td>
+          <td style="padding: 8px; border: 1px solid #ddd; width: 300px;">${row.analysisComment || "N/A"}</td>
           <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${row.status || "N/A"}</td>
           <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${consumption}</td>
           <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${row.pdca || "N/A"}</td>
@@ -150,7 +150,7 @@ function generateEmailBody(greeting, solution, rows, sheet, spreadsheetUrl) {
           <th style="padding: 8px; text-align: center; border: 1px solid #ddd; width: 110px;">Stok Maliyeti<br>(k€)</th>
           <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">Toplam Adet</th>
           <th style="padding: 8px; border: 1px solid #ddd;">Grup İsmi</th>
-          <th style="padding: 8px; border: 1px solid #ddd; width: 240px;">Ön Analiz Yorumu</th>
+          <th style="padding: 8px; border: 1px solid #ddd; width: 300px;">Ön Analiz Yorumu</th>
           <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">Durum</th>
           <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">Tüketim</th>
           <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">PDCA Durumu</th>
@@ -175,7 +175,7 @@ function generateEmailBody(greeting, solution, rows, sheet, spreadsheetUrl) {
           <th style="padding: 8px; text-align: center; border: 1px solid #ddd; width: 110px;">Stok Maliyeti<br>(k€)</th>
           <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">Toplam Adet</th>
           <th style="padding: 8px; border: 1px solid #ddd;">Grup İsmi</th>
-          <th style="padding: 8px; border: 1px solid #ddd; width: 240px;">Ön Analiz Yorumu</th>
+          <th style="padding: 8px; border: 1px solid #ddd; width: 300px;">Ön Analiz Yorumu</th>
           <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">Durum</th>
           <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">Tüketim</th>
           <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">PDCA Durumu</th>
