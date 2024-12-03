@@ -29,7 +29,7 @@ function sendEmails(simulation = false) {
     solution: String(row[getColumnIndex(solutionColumn)] || "").replace(/^\d+-/, "").trim(),
     reference: row[getColumnIndex(referenceColumn)],
     productName: row[getColumnIndex(productNameColumn)],
-    stockCost: Math.round(row[getColumnIndex(stockCostColumn)] || 0),
+    stockCost: (row[getColumnIndex(stockCostColumn)] || 0) * 1000,
     totalQuantity: row[getColumnIndex(totalQuantityColumn)],
     groupName: row[getColumnIndex(groupNameColumn)],
     analysisComment: row[getColumnIndex(analysisCommentColumn)],
@@ -38,11 +38,19 @@ function sendEmails(simulation = false) {
     pdca: calculatePDCAStatus(row, pdcaColumns),
   }));
 
-  const validRows = rows.filter(row => isValidEmail(row.ownerEmail));
+  // Filter valid rows
+  const validRows = rows.filter(row => isValidEmail(row.ownerEmail) && row.solution);
 
+  // Group data by owner name and solution
   const groupedData = groupByMultipleKeys(validRows, ["ownerName", "solution"]);
 
-  Object.entries(groupedData).forEach(([key, groupedRows]) => {
+  // Filter out groups where all references are at the "Act" level
+  const filteredGroups = Object.entries(groupedData).filter(([key, groupedRows]) => {
+    return groupedRows.some(row => row.pdca !== "Act"); // At least one reference is not at "Act"
+  });
+
+  // Process each group
+  filteredGroups.forEach(([key, groupedRows]) => {
     const [ownerName, solution] = key.split("|");
     const ownerEmail = groupedRows[0].ownerEmail;
     const ccEmails = groupedRows[0].ccEmails.filter(isValidEmail);
@@ -62,7 +70,48 @@ function sendEmails(simulation = false) {
     }
   });
 
-  Logger.log(`${Object.keys(groupedData).length} emails processed.`);
+  Logger.log(`${filteredGroups.length} emails processed.`);
+}
+
+function calculatePDCAStatus(row, pdcaColumns) {
+  const statuses = pdcaColumns.map(col => row[getColumnIndex(col)] === true);
+  if (statuses[3]) return "Act";
+  if (statuses[2]) return "Check";
+  if (statuses[1]) return "Do";
+  if (statuses[0]) return "Plan";
+  return "N/A";
+}
+
+function generateGreeting(ownerName, maleNames, femaleNames) {
+  const firstName = ownerName.split(" ")[0];
+
+  if (maleNames.includes(firstName)) {
+    return `${firstName} Bey`;
+  } else if (femaleNames.includes(firstName)) {
+    return `${firstName} Hanım`;
+  } else {
+    return `${firstName}`;
+  }
+}
+
+function isValidEmail(email) {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return email && emailRegex.test(email);
+}
+
+function getColumnIndex(columnLetter) {
+  const columnNumber = columnLetter
+    .split("")
+    .reduce((acc, char) => acc * 26 + char.charCodeAt(0) - 64, 0);
+  return columnNumber - 1;
+}
+
+function groupByMultipleKeys(array, keys) {
+  return array.reduce((result, item) => {
+    const groupKey = keys.map(key => item[key]).join("|");
+    (result[groupKey] = result[groupKey] || []).push(item);
+    return result;
+  }, {});
 }
 
 function generateGreeting(ownerName, maleNames, femaleNames) {
@@ -82,13 +131,14 @@ function generateEmailBody(greeting, solution, rows, sheet, spreadsheetUrl) {
   let totalStockCostProgress = 0;
 
   // Filter rows for the two tables
-  const plannedRows = rows.filter(row => row.pdca === "Plan");
-  const progressRows = rows.filter(row => row.pdca === "Do" || row.pdca === "Check");
+  const plannedRows = rows.filter(row => row.pdca === "Plan").sort((a, b) => b.stockCost - a.stockCost);
+  const progressRows = rows.filter(row => row.pdca === "Do" || row.pdca === "Check").sort((a, b) => b.stockCost - a.stockCost);
 
   // Generate HTML for the "Planlanan Aksiyonlar" table
   const plannedRowsHtml = plannedRows
     .map((row, index) => {
       totalStockCostPlan += row.stockCost || 0;
+      let formattedStockCost = (row.stockCost).toFixed(2); // Use let instead of const
       const consumption = getConsumptionValue(row.status, row.consumption);
       const rowUrl = `${spreadsheetUrl}#gid=${sheet.getSheetId()}&range=A${row.index}`;
       return `
@@ -96,7 +146,7 @@ function generateEmailBody(greeting, solution, rows, sheet, spreadsheetUrl) {
           <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${index + 1}</td>
           <td style="padding: 8px; border: 1px solid #ddd;">${row.reference || "N/A"}</td>
           <td style="padding: 8px; border: 1px solid #ddd;">${row.productName || "N/A"}</td>
-          <td style="padding: 8px; text-align: center; border: 1px solid #ddd; width: 110px;">${row.stockCost}</td>
+          <td style="padding: 8px; text-align: center; border: 1px solid #ddd; width: 110px;">${formattedStockCost}</td>
           <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${row.totalQuantity || "N/A"}</td>
           <td style="padding: 8px; border: 1px solid #ddd;">${row.groupName || "N/A"}</td>
           <td style="padding: 8px; border: 1px solid #ddd; width: 300px;">${row.analysisComment || "N/A"}</td>
@@ -112,6 +162,7 @@ function generateEmailBody(greeting, solution, rows, sheet, spreadsheetUrl) {
   const progressRowsHtml = progressRows
     .map((row, index) => {
       totalStockCostProgress += row.stockCost || 0;
+      let formattedStockCost = (row.stockCost).toFixed(2); // Use let instead of const
       const consumption = getConsumptionValue(row.status, row.consumption);
       const rowUrl = `${spreadsheetUrl}#gid=${sheet.getSheetId()}&range=A${row.index}`;
       return `
@@ -119,7 +170,7 @@ function generateEmailBody(greeting, solution, rows, sheet, spreadsheetUrl) {
           <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${index + 1}</td>
           <td style="padding: 8px; border: 1px solid #ddd;">${row.reference || "N/A"}</td>
           <td style="padding: 8px; border: 1px solid #ddd;">${row.productName || "N/A"}</td>
-          <td style="padding: 8px; text-align: center; border: 1px solid #ddd; width: 110px;">${row.stockCost}</td>
+          <td style="padding: 8px; text-align: center; border: 1px solid #ddd; width: 110px;">${formattedStockCost}</td>
           <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${row.totalQuantity || "N/A"}</td>
           <td style="padding: 8px; border: 1px solid #ddd;">${row.groupName || "N/A"}</td>
           <td style="padding: 8px; border: 1px solid #ddd; width: 300px;">${row.analysisComment || "N/A"}</td>
@@ -147,7 +198,7 @@ function generateEmailBody(greeting, solution, rows, sheet, spreadsheetUrl) {
           <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">#</th>
           <th style="padding: 8px; border: 1px solid #ddd;">Referans</th>
           <th style="padding: 8px; border: 1px solid #ddd;">Ürün Adı</th>
-          <th style="padding: 8px; text-align: center; border: 1px solid #ddd; width: 110px;">Stok Maliyeti<br>(k€)</th>
+          <th style="padding: 8px; text-align: center; border: 1px solid #ddd; width: 110px;">Stok Maliyeti<br>(€)</th>
           <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">Toplam Adet</th>
           <th style="padding: 8px; border: 1px solid #ddd;">Grup İsmi</th>
           <th style="padding: 8px; border: 1px solid #ddd; width: 300px;">Ön Analiz Yorumu</th>
@@ -161,7 +212,7 @@ function generateEmailBody(greeting, solution, rows, sheet, spreadsheetUrl) {
         ${plannedRowsHtml}
       </tbody>
     </table>
-    <p style="margin-top: 15px;">&#x1F4B8; Toplam Stok Maliyeti: <b>${totalStockCostPlan} k€</b></p>
+   <p style="margin-top: 15px;">&#x1F4B8; Toplam Stok Maliyeti (Planlanan Aksiyonlar): <b>${(totalStockCostPlan / 1000).toFixed(2)} k€</b></p>
 
     <table style="border-collapse: collapse; width: 100%; font-family: Arial, sans-serif; margin-top: 20px;">
       <thead>
@@ -172,7 +223,7 @@ function generateEmailBody(greeting, solution, rows, sheet, spreadsheetUrl) {
           <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">#</th>
           <th style="padding: 8px; border: 1px solid #ddd;">Referans</th>
           <th style="padding: 8px; border: 1px solid #ddd;">Ürün Adı</th>
-          <th style="padding: 8px; text-align: center; border: 1px solid #ddd; width: 110px;">Stok Maliyeti<br>(k€)</th>
+          <th style="padding: 8px; text-align: center; border: 1px solid #ddd; width: 110px;">Stok Maliyeti<br>(€)</th>
           <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">Toplam Adet</th>
           <th style="padding: 8px; border: 1px solid #ddd;">Grup İsmi</th>
           <th style="padding: 8px; border: 1px solid #ddd; width: 300px;">Ön Analiz Yorumu</th>
@@ -186,7 +237,7 @@ function generateEmailBody(greeting, solution, rows, sheet, spreadsheetUrl) {
         ${progressRowsHtml}
       </tbody>
     </table>
-    <p style="margin-top: 15px;">&#x1F4B8; Toplam Stok Maliyeti: <b>${totalStockCostProgress} k€</b></p>
+    <p style="margin-top: 15px;">&#x1F4B8; Toplam Stok Maliyeti (Devam Eden Aksiyonlar): <b>${(totalStockCostProgress / 1000).toFixed(2)} k€</b></p>
   `;
 }
 
@@ -202,8 +253,9 @@ function getConsumptionValue(status, consumption) {
     if (parsedConsumption === 50) return "2-3 Years";
     if (parsedConsumption === 75) return "3-4 Years";
     if (parsedConsumption === 95) return "4+ Years";
+    return "Cannot Be Consumed"; // Explicitly mark items that don't fall within known ranges
   }
-  return "N/A";
+  return "N/A"; // For all other cases
 }
 
 function calculatePDCAStatus(row, pdcaColumns) {
