@@ -1,6 +1,5 @@
 function sendEmails(simulation = false) {
   const sheetName = "1_Total Provision";
-  const spreadsheetUrl = SpreadsheetApp.getActiveSpreadsheet().getUrl();
   const emailColumn = "AS";
   const ccColumn = "AT";
   const ownerNameColumn = "T";
@@ -50,25 +49,32 @@ function sendEmails(simulation = false) {
   });
 
   // Process each group
-  filteredGroups.forEach(([key, groupedRows]) => {
-    const [ownerName, solution] = key.split("|");
-    const ownerEmail = groupedRows[0].ownerEmail;
-    const ccEmails = groupedRows[0].ccEmails.filter(isValidEmail);
-    const subject = `♻️ ${solution} / Stock Depreciation Action`;
+ filteredGroups.forEach(([key, groupedRows]) => {
+  const [ownerName, solution] = key.split("|");
+  const ownerEmail = groupedRows[0].ownerEmail;
+  const ccEmails = groupedRows[0].ccEmails.filter(isValidEmail);
+  const subject = `♻️ ${solution} / Stock Depreciation Action`;
 
-    const greeting = generateGreeting(ownerName, maleNames, femaleNames);
+  const greeting = generateGreeting(ownerName, maleNames, femaleNames);
 
-    const body = generateEmailBody(greeting, solution, groupedRows, sheet, spreadsheetUrl);
+  // Create a new spreadsheet for this group
+  const spreadsheetFile = createSpreadsheetForGroup(groupedRows, solution);
 
-    if (simulation) {
-      Logger.log(`To: ${ownerEmail}, CC: ${ccEmails.join(", ")}, Subject: ${subject}, Body:\n${body}`);
-    } else {
-      GmailApp.sendEmail(ownerEmail, subject, body, {
-        cc: ccEmails.length ? ccEmails.join(",") : undefined,
-        htmlBody: body,
-      });
-    }
-  });
+  // Generate email body with the correct URLs
+  const body = `${generateEmailBody(greeting, solution, groupedRows, sheet, SpreadsheetApp.getActiveSpreadsheet().getUrl())}
+    <p>⚙️ Aksiyonlara ilişkin detaylı referans bilgilerini içeren dokümana aşağıdaki bağlantıdan ulaşabilirsiniz:</p>
+    <p><a href="${spreadsheetFile.getUrl()}">${solution} - Referans Listesi</a></p>
+    <p>Herhangi bir sorunuz olursa lütfen benimle iletişime geçmekten çekinmeyin.</p>`;
+
+  if (simulation) {
+    Logger.log(`To: ${ownerEmail}, CC: ${ccEmails.join(", ")}, Subject: ${subject}, Body:\n${body}`);
+  } else {
+    GmailApp.sendEmail(ownerEmail, subject, body, {
+      cc: ccEmails.length ? ccEmails.join(", ") : undefined,
+      htmlBody: body,
+    });
+  }
+ });
 
   Logger.log(`${filteredGroups.length} emails processed.`);
 }
@@ -138,7 +144,7 @@ function generateEmailBody(greeting, solution, rows, sheet, spreadsheetUrl) {
   const plannedRowsHtml = plannedRows
     .map((row, index) => {
       totalStockCostPlan += row.stockCost || 0;
-      let formattedStockCost = (row.stockCost).toFixed(2); // Use let instead of const
+      let formattedStockCost = Math.round(row.stockCost); // Use let instead of const
       const consumption = getConsumptionValue(row.status, row.consumption);
       const rowUrl = `${spreadsheetUrl}#gid=${sheet.getSheetId()}&range=A${row.index}`;
       return `
@@ -162,9 +168,9 @@ function generateEmailBody(greeting, solution, rows, sheet, spreadsheetUrl) {
   const progressRowsHtml = progressRows
     .map((row, index) => {
       totalStockCostProgress += row.stockCost || 0;
-      let formattedStockCost = (row.stockCost).toFixed(2); // Use let instead of const
+      let formattedStockCost = Math.round(row.stockCost); // Use let instead of const
       const consumption = getConsumptionValue(row.status, row.consumption);
-      const rowUrl = `${spreadsheetUrl}#gid=${sheet.getSheetId()}&range=A${row.index}`;
+      const rowUrl = `${SpreadsheetApp.getActiveSpreadsheet().getUrl()}#gid=${sheet.getSheetId()}&range=A${row.index}`;
       return `
         <tr>
           <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${index + 1}</td>
@@ -285,4 +291,63 @@ function groupByMultipleKeys(array, keys) {
     (result[groupKey] = result[groupKey] || []).push(item);
     return result;
   }, {});
+}
+
+function createSpreadsheetForGroup(groupedRows, solution) {
+  const sheetName = `${solution} - Referanslar`;
+  const spreadsheet = SpreadsheetApp.create(sheetName);
+  const sheet = spreadsheet.getActiveSheet();
+
+  // Define headers
+  const headers = [
+    "#", "Referans", "Ürün Adı", "Stok Maliyeti (k€)", "Toplam Adet",
+    "Grup İsmi", "Ön Analiz Yorumu", "Durum", "Tüketim", "PDCA Durumu", "Satır Linki"
+  ];
+
+  // Set headers
+  sheet.appendRow(headers);
+
+  // Populate rows
+  groupedRows.forEach((row, index) => {
+    const rowUrl = `${SpreadsheetApp.getActiveSpreadsheet().getUrl()}#gid=${row.index}&range=A${row.index}`;
+    sheet.appendRow([
+      index + 1, // #
+      row.reference || "N/A", // Referans
+      row.productName || "N/A", // Ürün Adı
+      (row.stockCost / 1000).toFixed(2), // Stok Maliyeti (k€)
+      row.totalQuantity || "N/A", // Toplam Adet
+      row.groupName || "N/A", // Grup İsmi
+      row.analysisComment || "N/A", // Ön Analiz Yorumu
+      row.status || "N/A", // Durum
+      getConsumptionValue(row.status, row.consumption), // Tüketim
+      row.pdca || "N/A", // PDCA Durumu
+      rowUrl // Satır Linki
+    ]);
+  });
+
+  // Apply formatting
+  const range = sheet.getRange(1, 1, sheet.getLastRow(), sheet.getLastColumn());
+
+  // Bold headers
+  const headerRange = sheet.getRange(1, 1, 1, headers.length);
+  headerRange.setFontWeight("bold");
+  headerRange.setBackground("#d0eaff"); // Light blue background for headers
+  headerRange.setHorizontalAlignment("center");
+
+  // Auto-fit columns and apply borders
+  sheet.autoResizeColumns(1, headers.length);
+  range.setBorder(true, true, true, true, true, true);
+
+  // Set column-specific formats
+  sheet.setColumnWidth(3, 250); // Wider column for "Ürün Adı"
+  sheet.setColumnWidth(7, 300); // Wider column for "Ön Analiz Yorumu"
+  sheet.setColumnWidth(11, 150); // Narrower column for "Satır Linki"
+
+  // Apply alternating row colors
+  const dataRange = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length);
+  const banding = dataRange.applyRowBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY);
+  banding.setFirstRowColor("#f2f2f2");
+  banding.setSecondRowColor("#ffffff");
+
+  return spreadsheet;
 }
