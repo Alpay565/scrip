@@ -16,7 +16,9 @@ function sendEmails(simulation = false) {
   const maleNames = ["Ahmet", "Koray", "Gürsan", "Kadir", "Kemal", "Mustafa", "Samet", "Tolga", "Yasin", "Alpay"];
   const femaleNames = ["Tuğba"];
 
-  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  // Ensure `spreadsheet` is defined here
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet(); // Correctly define spreadsheet
+  const spreadsheetUrl = spreadsheet.getUrl(); // Define the spreadsheet URL here
   const sheet = spreadsheet.getSheetByName(sheetName);
   const data = sheet.getDataRange().getValues();
 
@@ -50,35 +52,38 @@ function sendEmails(simulation = false) {
   });
 
   // Process each group
- filteredGroups.forEach(([key, groupedRows]) => {
-  const [ownerName, solution] = key.split("|");
-  const ownerEmail = groupedRows[0].ownerEmail;
-  const ccEmails = groupedRows[0].ccEmails.filter(isValidEmail);
-  const subject = `♻️ ${solution} / Stock Depreciation Action`;
+  filteredGroups.forEach(([key, groupedRows]) => {
+    const [ownerName, solution] = key.split("|");
+    const ownerEmail = groupedRows[0].ownerEmail;
+    const ccEmails = groupedRows[0].ccEmails.filter(isValidEmail);
+    const subject = `♻️ ${solution} / Stock Depreciation Action`;
 
-  const greeting = generateGreeting(ownerName, maleNames, femaleNames);
+    const greeting = generateGreeting(ownerName, maleNames, femaleNames);
 
-  // Create a new spreadsheet for this group
-  const spreadsheetFile = createSpreadsheetForGroup(groupedRows, solution);
+    // Create a new spreadsheet for this group
+    const spreadsheetFile = createSpreadsheetForGroup(groupedRows, solution);
+    const newSpreadsheetUrl = spreadsheetFile.getUrl(); // Separate variable for new sheet link
 
-  // Generate email body with the correct URLs
-  const body = `${generateEmailBody(greeting, solution, groupedRows, sheet, SpreadsheetApp.getActiveSpreadsheet().getUrl())}
-    <p>⚙️ Aksiyonlara ilişkin detaylı referans bilgilerini içeren dokümana aşağıdaki bağlantıdan ulaşabilirsiniz:</p>
-    <p><a href="${spreadsheetFile.getUrl()}">${solution} - Referans Listesi</a></p>
-    <p>Herhangi bir sorunuz olursa lütfen benimle iletişime geçmekten çekinmeyin.</p>
-    <p>Önemli bir not: Bu referanslar için 11 Aralık'a kadar harekete geçilmesi büyük önem taşımaktadır. Bu tarihten sonra üst yönetime raporlanmaya başlanacaktır. Referanslar için yorumlarınızı veya planladığınız aksiyonları aksiyon sahibi yorumu sütununa girmeniz sürecin takibini kolaylaştıracaktır.Katkılarınız için teşekkür ederiz.</p>`;
+    // Generate email body with the correct URLs
+    const body = `
+    <p>${greeting} merhabalar,</p>
+    <p><strong>${solution}</strong> grubu ürünlerin yönetimi için sizin liderliğinizde çalışmaları takip etmek istiyoruz. &#129309; Katkılarınız için şimdiden teşekkür ederiz. &#128079;</p>
+    <p><strong>${solution}</strong> grubu ürünlerin yönetimi için aşağıdaki tabloda detaylarıyla birlikte aksiyonları görebilirsiniz. &#128293;</p> 
+    <p>Ayrıca bu gruba ait detaylı referans bilgileri için lütfen <a href="${newSpreadsheetUrl}">${solution} - Referans Listesi</a> &#128433; bağlantısını kullanınız.</p>
+    <p><strong>Önemli bir not:</strong> Hurda edilecek referansların 11 Aralık'a kadar belirlenmesi büyük önem taşımaktadır. Bu tarihten sonra üst yönetime raporlanmaya başlanacaktır.</p>
+    <p>Herhangi bir sorunuz olursa lütfen benimle iletişime geçmekten çekinmeyin. &#128588;</p>
+    ${generateEmailBody(greeting, solution, groupedRows, sheet, spreadsheetUrl)}
+    `;
 
-  if (simulation) {
-    Logger.log(`To: ${ownerEmail}, CC: ${ccEmails.join(", ")}, Subject: ${subject}, Body:\n${body}`);
-  } else {
-    GmailApp.sendEmail(ownerEmail, subject, body, {
-      cc: ccEmails.length ? ccEmails.join(", ") : undefined,
-      htmlBody: body,
-    });
-  }
- });
-
-  Logger.log(`${filteredGroups.length} emails processed.`);
+    if (simulation) {
+      Logger.log(`To: ${ownerEmail}, CC: ${ccEmails.join(", ")}, Subject: ${subject}, Body:\n${body}`);
+    } else {
+      GmailApp.sendEmail(ownerEmail, subject, body, {
+        cc: ccEmails.length ? ccEmails.join(", ") : undefined,
+        htmlBody: body,
+      });
+    }
+  });
 }
 
 function calculatePDCAStatus(row, pdcaColumns) {
@@ -194,10 +199,6 @@ function generateEmailBody(greeting, solution, rows, sheet, spreadsheetUrl) {
 
   // Combine the two tables with "Toplam Stok Maliyeti" included
   return `
-    <p>${greeting} merhabalar,</p>
-    <p><strong>${solution}</strong> grubu ürünlerin yönetimi için sizin liderliğinizde çalışmaları takip etmek istiyoruz. Katkılarınız için şimdiden teşekkür ederiz.</p>
-    <p>Her aksiyon tamamlandığında <strong>PDCA döngüsünde ilgili adıma ait kutucuğu işaretleyerek</strong> tüm sürecin takibini kolaylaştırabilirsiniz &#x2705;.</p>
-    <p>Sorularınız ya da desteğe ihtiyaç duyduğunuz bir konu olursa, bana her zaman ulaşabilirsiniz. Süreci birlikte başarıyla yöneteceğimizden eminim &#x1F64C;.</p>
 
     <table style="border-collapse: collapse; width: 100%; font-family: Arial, sans-serif;">
       <thead>
