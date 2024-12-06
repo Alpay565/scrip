@@ -1,18 +1,18 @@
 function sendEmails(simulation = false) {
   const sheetName = "1_Total Provision";
-  const emailColumn = "AS";
-  const ccColumn = "AT";
-  const ownerNameColumn = "T";
-  const solutionColumn = "X";
+  const emailColumn = "AR";
+  const ccColumn = "AS";
+  const ownerNameColumn = "R";
+  const solutionColumn = "V";
   const referenceColumn = "A";
   const productNameColumn = "B";
-  const stockCostColumn = "K";
+  const stockCostColumn = "AI";
   const totalQuantityColumn = "I";
-  const groupNameColumn = "AF";
-  const analysisCommentColumn = "Y";
-  const statusColumn = "AD";
-  const consumptionColumn = "AH"; // Tüketim column
-  const pdcaColumns = ["P", "Q", "R", "S"];
+  const groupNameColumn = "AD";
+  const analysisCommentColumn = "W";
+  const statusColumn = "AC";
+  const consumptionColumn = "AF"; // Tüketim column
+  const pdcaColumns = ["N", "O", "P", "Q"];
   const maleNames = ["Ahmet", "Koray", "Gürsan", "Kadir", "Kemal", "Mustafa", "Samet", "Tolga", "Yasin", "Alpay"];
   const femaleNames = ["Tuğba"];
 
@@ -35,6 +35,7 @@ function sendEmails(simulation = false) {
     status: row[getColumnIndex(statusColumn)],
     consumption: row[getColumnIndex(consumptionColumn)], // Fetch consumption data
     pdca: calculatePDCAStatus(row, pdcaColumns),
+    ownerComment: row[getColumnIndex("X")],
   }));
 
   // Filter valid rows
@@ -64,7 +65,8 @@ function sendEmails(simulation = false) {
   const body = `${generateEmailBody(greeting, solution, groupedRows, sheet, SpreadsheetApp.getActiveSpreadsheet().getUrl())}
     <p>⚙️ Aksiyonlara ilişkin detaylı referans bilgilerini içeren dokümana aşağıdaki bağlantıdan ulaşabilirsiniz:</p>
     <p><a href="${spreadsheetFile.getUrl()}">${solution} - Referans Listesi</a></p>
-    <p>Herhangi bir sorunuz olursa lütfen benimle iletişime geçmekten çekinmeyin.</p>`;
+    <p>Herhangi bir sorunuz olursa lütfen benimle iletişime geçmekten çekinmeyin.</p>
+    <p>Önemli bir not: Bu referanslar için 11 Aralık'a kadar harekete geçilmesi büyük önem taşımaktadır. Bu tarihten sonra üst yönetime raporlanmaya başlanacaktır. Referanslar için yorumlarınızı veya planladığınız aksiyonları aksiyon sahibi yorumu sütununa girmeniz sürecin takibini kolaylaştıracaktır.Katkılarınız için teşekkür ederiz.</p>`;
 
   if (simulation) {
     Logger.log(`To: ${ownerEmail}, CC: ${ccEmails.join(", ")}, Subject: ${subject}, Body:\n${body}`);
@@ -160,6 +162,7 @@ function generateEmailBody(greeting, solution, rows, sheet, spreadsheetUrl) {
           <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${consumption}</td>
           <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${row.pdca || "N/A"}</td>
           <td style="padding: 8px; text-align: center; border: 1px solid #ddd;"><a href="${rowUrl}">Link</a></td>
+          <td style="padding: 8px; border: 1px solid #ddd;">${row.ownerComment || "N/A"}</td>
         </tr>`;
     })
     .join("");
@@ -184,6 +187,7 @@ function generateEmailBody(greeting, solution, rows, sheet, spreadsheetUrl) {
           <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${consumption}</td>
           <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${row.pdca || "N/A"}</td>
           <td style="padding: 8px; text-align: center; border: 1px solid #ddd;"><a href="${rowUrl}">Link</a></td>
+          <td style="padding: 8px; border: 1px solid #ddd;">${row.ownerComment || "N/A"}</td>
         </tr>`;
     })
     .join("");
@@ -198,7 +202,7 @@ function generateEmailBody(greeting, solution, rows, sheet, spreadsheetUrl) {
     <table style="border-collapse: collapse; width: 100%; font-family: Arial, sans-serif;">
       <thead>
         <tr style="background-color: #FFF9C4; color: black;">
-          <th colspan="11" style="padding: 10px; text-align: center;">Planlanan Aksiyonlar</th>
+          <th colspan="12" style="padding: 10px; text-align: center;">Planlanan Aksiyonlar</th>
         </tr>
         <tr style="background-color: #FFF9C4; color: black;">
           <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">#</th>
@@ -212,6 +216,7 @@ function generateEmailBody(greeting, solution, rows, sheet, spreadsheetUrl) {
           <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">Tüketim</th>
           <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">PDCA Durumu</th>
           <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">Satır Linki</th>
+          <th style="padding: 8px; border: 1px solid #ddd; width: 300px;">Aksiyon Sahibi Yorumu</th>
         </tr>
       </thead>
       <tbody>
@@ -223,7 +228,7 @@ function generateEmailBody(greeting, solution, rows, sheet, spreadsheetUrl) {
     <table style="border-collapse: collapse; width: 100%; font-family: Arial, sans-serif; margin-top: 20px;">
       <thead>
         <tr style="background-color: #d0eaff; color: black;">
-          <th colspan="11" style="padding: 10px; text-align: center;">Devam Eden Aksiyonlar</th>
+          <th colspan="12" style="padding: 10px; text-align: center;">Devam Eden Aksiyonlar</th>
         </tr>
         <tr style="background-color: #d0eaff; color: black;">
           <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">#</th>
@@ -237,6 +242,7 @@ function generateEmailBody(greeting, solution, rows, sheet, spreadsheetUrl) {
           <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">Tüketim</th>
           <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">PDCA Durumu</th>
           <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">Satır Linki</th>
+          <th style="padding: 8px; border: 1px solid #ddd; width: 300px;">Aksiyon Sahibi Yorumu</th>
         </tr>
       </thead>
       <tbody>
