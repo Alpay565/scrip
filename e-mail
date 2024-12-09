@@ -1,4 +1,4 @@
-function sendEmails(simulation = false) {
+function sendEmails(simulation = true) {
   const sheetName = "1_Total Provision";
   const emailColumn = "AR";
   const ccColumn = "AS";
@@ -15,6 +15,7 @@ function sendEmails(simulation = false) {
   const pdcaColumns = ["N", "O", "P", "Q"];
   const maleNames = ["Ahmet", "Koray", "Gürsan", "Kadir", "Kemal", "Mustafa", "Samet", "Tolga", "Yasin", "Alpay"];
   const femaleNames = ["Tuğba"];
+  const emailCount = {};
 
   // Ensure `spreadsheet` is defined here
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet(); // Correctly define spreadsheet
@@ -76,13 +77,25 @@ function sendEmails(simulation = false) {
     `;
 
     if (simulation) {
-      Logger.log(`To: ${ownerEmail}, CC: ${ccEmails.join(", ")}, Subject: ${subject}, Body:\n${body}`);
-    } else {
-      GmailApp.sendEmail(ownerEmail, subject, body, {
-        cc: ccEmails.length ? ccEmails.join(", ") : undefined,
-        htmlBody: body,
-      });
-    }
+      Logger.log(`To: ${ownerEmail}, CC: ${ccEmails.join(", ")}, Subject: ${subject}`);
+  
+  // Track the email count
+  if (!emailCount[ownerEmail]) {
+    emailCount[ownerEmail] = 0;
+  }
+  emailCount[ownerEmail]++;
+} else {
+  GmailApp.sendEmail(ownerEmail, subject, body, {
+    cc: ccEmails.length ? ccEmails.join(", ") : undefined,
+    htmlBody: body,
+    });
+   }
+   if (simulation) {
+  Logger.log("Simulation Summary: Emails sent to each recipient");
+  Object.entries(emailCount).forEach(([email, count]) => {
+    Logger.log(`Recipient: ${email}, Emails Sent: ${count}`);
+    });
+   }
   });
 }
 
