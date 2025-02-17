@@ -1,19 +1,19 @@
-function sendEmails(simulation = true) {
+function sendEmails(simulation = false) {
   const sheetName = "1_Total Provision";
-  const emailColumn = "AR";
-  const ccColumn = "AS";
+  const emailColumn = "BD";
+  const ccColumn = "BE";
   const ownerNameColumn = "R";
   const solutionColumn = "V";
   const referenceColumn = "A";
   const productNameColumn = "B";
-  const stockCostColumn = "AI";
-  const totalQuantityColumn = "I";
+  const stockCostColumn = "AN";
+  const totalQuantityColumn = "AQ";
   const groupNameColumn = "AD";
   const analysisCommentColumn = "W";
   const statusColumn = "AC";
   const consumptionColumn = "AF"; // Tüketim column
   const pdcaColumns = ["N", "O", "P", "Q"];
-  const maleNames = ["Ahmet", "Koray", "Gürsan", "Kadir", "Kemal", "Mustafa", "Samet", "Tolga", "Yasin", "Alpay"];
+  const maleNames = ["Ahmet", "Koray", "Gürsan", "Kadir", "Kemal", "Mustafa", "Samet", "Tolga", "Yasin", "Alpay","Volkan","Erman","Mesut","Selamettin","Serdar","Serhad","Serhat","Taha","Yiğit","Cem"];
   const femaleNames = ["Tuğba"];
   const emailCount = {};
 
@@ -54,6 +54,11 @@ function sendEmails(simulation = true) {
 
   // Process each group
   filteredGroups.forEach(([key, groupedRows]) => {
+    const totalComments = groupedRows.length;
+    const validComments = groupedRows.filter(row => 
+    row.ownerComment && row.ownerComment.trim() !== "" && row.ownerComment !== "Lütfen yorum giriniz."
+    ).length;
+    const commentPercentage = ((validComments / totalComments) * 100).toFixed(2); // Percentage with 2 decimal places
     const [ownerName, solution] = key.split("|");
     const ownerEmail = groupedRows[0].ownerEmail;
     const ccEmails = groupedRows[0].ccEmails.filter(isValidEmail);
@@ -71,9 +76,7 @@ function sendEmails(simulation = true) {
     <p><strong>${solution}</strong> grubu ürünlerin yönetimi için sizin liderliğinizde çalışmaları takip etmek istiyoruz. &#129309; Katkılarınız için şimdiden teşekkür ederiz. &#128079;</p>
     <p><strong>${solution}</strong> grubu ürünlerin yönetimi için aşağıdaki tabloda detaylarıyla birlikte aksiyonları görebilirsiniz. &#128293;</p> 
     <p>Ayrıca bu gruba ait detaylı referans bilgileri için lütfen <a href="${newSpreadsheetUrl}">${solution} - Referans Listesi</a> &#128433; bağlantısını kullanınız.</p>
-    <p><strong>Önemli bir not:</strong> Hurda edilecek referansların 11 Aralık'a kadar belirlenmesi büyük önem taşımaktadır. Bu tarihten sonra üst yönetime raporlanmaya başlanacaktır.</p>
-    <p>Herhangi bir sorunuz olursa lütfen benimle iletişime geçmekten çekinmeyin. &#128588;</p>
-    ${generateEmailBody(greeting, solution, groupedRows, sheet, spreadsheetUrl)}
+    ${generateEmailBody(greeting, solution, groupedRows, sheet, spreadsheetUrl, commentPercentage)}
     `;
 
     if (simulation) {
@@ -90,6 +93,8 @@ function sendEmails(simulation = true) {
     htmlBody: body,
     });
    }
+
+   
    if (simulation) {
   Logger.log("Simulation Summary: Emails sent to each recipient");
   Object.entries(emailCount).forEach(([email, count]) => {
@@ -152,118 +157,131 @@ function generateGreeting(ownerName, maleNames, femaleNames) {
   }
 }
 
-function generateEmailBody(greeting, solution, rows, sheet, spreadsheetUrl) {
+function generateEmailBody(greeting, solution, rows, sheet, spreadsheetUrl, commentPercentage) { 
   let totalStockCostPlan = 0;
   let totalStockCostProgress = 0;
 
+  // Count PDCA statuses
+  const totalRows = rows.length;
+  const pdcaCounts = {
+    Plan: rows.filter(row => row.pdca === "Plan").length,
+    Do: rows.filter(row => row.pdca === "Do").length,
+    Check: rows.filter(row => row.pdca === "Check").length,
+    Act: rows.filter(row => row.pdca === "Act").length
+  };
+
+  const pdcaPercentages = {
+    Plan: ((pdcaCounts.Plan / totalRows) * 100).toFixed(2),
+    Do: ((pdcaCounts.Do / totalRows) * 100).toFixed(2),
+    Check: ((pdcaCounts.Check / totalRows) * 100).toFixed(2),
+    Act: ((pdcaCounts.Act / totalRows) * 100).toFixed(2)
+  };
+
   // Filter rows for the two tables
-  const plannedRows = rows.filter(row => row.pdca === "Plan").sort((a, b) => b.stockCost - a.stockCost);
-  const progressRows = rows.filter(row => row.pdca === "Do" || row.pdca === "Check").sort((a, b) => b.stockCost - a.stockCost);
+  const plannedRows = rows.filter(row => row.pdca === "Plan" || row.pdca === "Do").sort((a, b) => b.stockCost - a.stockCost);
+  const progressRows = rows.filter(row => row.pdca === "Check").sort((a, b) => b.stockCost - a.stockCost);
 
   // Generate HTML for the "Planlanan Aksiyonlar" table
-  const plannedRowsHtml = plannedRows
-    .map((row, index) => {
-      totalStockCostPlan += row.stockCost || 0;
-      let formattedStockCost = Math.round(row.stockCost); // Use let instead of const
-      const consumption = getConsumptionValue(row.status, row.consumption);
-      const rowUrl = `${spreadsheetUrl}#gid=${sheet.getSheetId()}&range=A${row.index}`;
-      return `
-        <tr>
-          <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${index + 1}</td>
-          <td style="padding: 8px; border: 1px solid #ddd;">${row.reference || "N/A"}</td>
-          <td style="padding: 8px; border: 1px solid #ddd;">${row.productName || "N/A"}</td>
-          <td style="padding: 8px; text-align: center; border: 1px solid #ddd; width: 110px;">${formattedStockCost}</td>
-          <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${row.totalQuantity || "N/A"}</td>
-          <td style="padding: 8px; border: 1px solid #ddd;">${row.groupName || "N/A"}</td>
-          <td style="padding: 8px; border: 1px solid #ddd; width: 300px;">${row.analysisComment || "N/A"}</td>
-          <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${row.status || "N/A"}</td>
-          <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${consumption}</td>
-          <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${row.pdca || "N/A"}</td>
-          <td style="padding: 8px; text-align: center; border: 1px solid #ddd;"><a href="${rowUrl}">Link</a></td>
-          <td style="padding: 8px; border: 1px solid #ddd;">${row.ownerComment || "N/A"}</td>
-        </tr>`;
-    })
-    .join("");
+  const plannedRowsHtml = plannedRows.map((row, index) => {
+    totalStockCostPlan += row.stockCost || 0;
+    let formattedStockCost = Math.round(row.stockCost);
+    const consumption = getConsumptionValue(row.status, row.consumption);
+    const rowUrl = `${spreadsheetUrl}#gid=${sheet.getSheetId()}&range=A${row.index}`;
+    return `
+      <tr>
+        <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${index + 1}</td>
+        <td style="padding: 8px; border: 1px solid #ddd;">${row.reference || "N/A"}</td>
+        <td style="padding: 8px; border: 1px solid #ddd;">${row.productName || "N/A"}</td>
+        <td style="padding: 8px; text-align: center; border: 1px solid #ddd; width: 110px;">${formattedStockCost}</td>
+        <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${row.totalQuantity || "N/A"}</td>
+        <td style="padding: 8px; border: 1px solid #ddd;">${row.groupName || "N/A"}</td>
+        <td style="padding: 8px; border: 1px solid #ddd; width: 300px;">${row.analysisComment || "N/A"}</td>
+        <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${row.status || "N/A"}</td>
+        <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${consumption}</td>
+        <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${row.pdca || "N/A"}</td>
+        <td style="padding: 8px; text-align: center; border: 1px solid #ddd;"><a href="${rowUrl}">Link</a></td>
+        <td style="padding: 8px; border: 1px solid #ddd;">${row.ownerComment || "N/A"}</td>
+      </tr>`;
+  }).join("");
 
   // Generate HTML for the "Devam Eden Aksiyonlar" table
-  const progressRowsHtml = progressRows
-    .map((row, index) => {
-      totalStockCostProgress += row.stockCost || 0;
-      let formattedStockCost = Math.round(row.stockCost); // Use let instead of const
-      const consumption = getConsumptionValue(row.status, row.consumption);
-      const rowUrl = `${SpreadsheetApp.getActiveSpreadsheet().getUrl()}#gid=${sheet.getSheetId()}&range=A${row.index}`;
-      return `
-        <tr>
-          <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${index + 1}</td>
-          <td style="padding: 8px; border: 1px solid #ddd;">${row.reference || "N/A"}</td>
-          <td style="padding: 8px; border: 1px solid #ddd;">${row.productName || "N/A"}</td>
-          <td style="padding: 8px; text-align: center; border: 1px solid #ddd; width: 110px;">${formattedStockCost}</td>
-          <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${row.totalQuantity || "N/A"}</td>
-          <td style="padding: 8px; border: 1px solid #ddd;">${row.groupName || "N/A"}</td>
-          <td style="padding: 8px; border: 1px solid #ddd; width: 300px;">${row.analysisComment || "N/A"}</td>
-          <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${row.status || "N/A"}</td>
-          <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${consumption}</td>
-          <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${row.pdca || "N/A"}</td>
-          <td style="padding: 8px; text-align: center; border: 1px solid #ddd;"><a href="${rowUrl}">Link</a></td>
-          <td style="padding: 8px; border: 1px solid #ddd;">${row.ownerComment || "N/A"}</td>
-        </tr>`;
-    })
-    .join("");
+  const progressRowsHtml = progressRows.map((row, index) => {
+    totalStockCostProgress += row.stockCost || 0;
+    let formattedStockCost = Math.round(row.stockCost);
+    const consumption = getConsumptionValue(row.status, row.consumption);
+    const rowUrl = `${spreadsheetUrl}#gid=${sheet.getSheetId()}&range=A${row.index}`;
+    return `
+      <tr>
+        <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${index + 1}</td>
+        <td style="padding: 8px; border: 1px solid #ddd;">${row.reference || "N/A"}</td>
+        <td style="padding: 8px; border: 1px solid #ddd;">${row.productName || "N/A"}</td>
+        <td style="padding: 8px; text-align: center; border: 1px solid #ddd; width: 110px;">${formattedStockCost}</td>
+        <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${row.totalQuantity || "N/A"}</td>
+        <td style="padding: 8px; border: 1px solid #ddd;">${row.groupName || "N/A"}</td>
+        <td style="padding: 8px; border: 1px solid #ddd; width: 300px;">${row.analysisComment || "N/A"}</td>
+        <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${row.status || "N/A"}</td>
+        <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${consumption}</td>
+        <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${row.pdca || "N/A"}</td>
+        <td style="padding: 8px; text-align: center; border: 1px solid #ddd;"><a href="${rowUrl}">Link</a></td>
+        <td style="padding: 8px; border: 1px solid #ddd;">${row.ownerComment || "N/A"}</td>
+      </tr>`;
+  }).join("");
 
-  // Combine the two tables with "Toplam Stok Maliyeti" included
   return `
+    <p style="margin-top: 15px;">&#x1F4DD; Aksiyon sahibi yorumlarının giriş oranı: <b>%${commentPercentage}</b></p>
+    <p>&#x2705; <strong>PDCA Durumu Dağılımı:</strong></p>
+    <p> &#128204; Planlanan Aksiyonlar (Plan): <b>%${pdcaPercentages.Plan}</b></p>
+    <p> &#128221; Devam Eden Aksiyonlar (Do): <b>%${pdcaPercentages.Do}</b></p>
+    <p> &#128269; Kontrol Edilen Aksiyonlar (Check): <b>%${pdcaPercentages.Check}</b></p>
+    <p> &#128200; Tamamlanan Aksiyonlar (Act): <b>%${pdcaPercentages.Act}</b></p>
 
     <table style="border-collapse: collapse; width: 100%; font-family: Arial, sans-serif;">
       <thead>
-        <tr style="background-color: #FFF9C4; color: black;">
-          <th colspan="12" style="padding: 10px; text-align: center;">Planlanan Aksiyonlar</th>
+        <tr style="background-color: #00c1ff; color: black;">
+          <th colspan="12" style="padding: 10px; text-align: center;">Planlanan Aksiyonlar (PROVISION)</th>
         </tr>
-        <tr style="background-color: #FFF9C4; color: black;">
+        <tr style="background-color: #00c1ff; color: black;">
           <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">#</th>
           <th style="padding: 8px; border: 1px solid #ddd;">Referans</th>
           <th style="padding: 8px; border: 1px solid #ddd;">Ürün Adı</th>
-          <th style="padding: 8px; text-align: center; border: 1px solid #ddd; width: 110px;">Stok Maliyeti<br>(€)</th>
+          <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">Stok Maliyeti (€)</th>
           <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">Toplam Adet</th>
           <th style="padding: 8px; border: 1px solid #ddd;">Grup İsmi</th>
-          <th style="padding: 8px; border: 1px solid #ddd; width: 300px;">Ön Analiz Yorumu</th>
+          <th style="padding: 8px; border: 1px solid #ddd;">Ön Analiz Yorumu</th>
           <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">Durum</th>
           <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">Tüketim</th>
           <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">PDCA Durumu</th>
           <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">Satır Linki</th>
-          <th style="padding: 8px; border: 1px solid #ddd; width: 300px;">Aksiyon Sahibi Yorumu</th>
+          <th style="padding: 8px; border: 1px solid #ddd;">Aksiyon Sahibi Yorumu</th>
         </tr>
       </thead>
-      <tbody>
-        ${plannedRowsHtml}
-      </tbody>
+      <tbody>${plannedRowsHtml}</tbody>
     </table>
-   <p style="margin-top: 15px;">&#x1F4B8; Toplam Stok Maliyeti (Planlanan Aksiyonlar): <b>${(totalStockCostPlan / 1000).toFixed(2)} k€</b></p>
 
     <table style="border-collapse: collapse; width: 100%; font-family: Arial, sans-serif; margin-top: 20px;">
       <thead>
         <tr style="background-color: #d0eaff; color: black;">
-          <th colspan="12" style="padding: 10px; text-align: center;">Devam Eden Aksiyonlar</th>
+          <th colspan="12" style="padding: 10px; text-align: center;">Devam Eden Aksiyonlar (ADJUSTED)</th>
         </tr>
         <tr style="background-color: #d0eaff; color: black;">
           <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">#</th>
           <th style="padding: 8px; border: 1px solid #ddd;">Referans</th>
           <th style="padding: 8px; border: 1px solid #ddd;">Ürün Adı</th>
-          <th style="padding: 8px; text-align: center; border: 1px solid #ddd; width: 110px;">Stok Maliyeti<br>(€)</th>
+          <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">Stok Maliyeti (€)</th>
           <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">Toplam Adet</th>
           <th style="padding: 8px; border: 1px solid #ddd;">Grup İsmi</th>
-          <th style="padding: 8px; border: 1px solid #ddd; width: 300px;">Ön Analiz Yorumu</th>
+          <th style="padding: 8px; border: 1px solid #ddd;">Ön Analiz Yorumu</th>
           <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">Durum</th>
           <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">Tüketim</th>
           <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">PDCA Durumu</th>
           <th style="padding: 8px; text-align: center; border: 1px solid #ddd;">Satır Linki</th>
-          <th style="padding: 8px; border: 1px solid #ddd; width: 300px;">Aksiyon Sahibi Yorumu</th>
+          <th style="padding: 8px; border: 1px solid #ddd;">Aksiyon Sahibi Yorumu</th>
         </tr>
       </thead>
-      <tbody>
-        ${progressRowsHtml}
-      </tbody>
+      <tbody>${progressRowsHtml}</tbody>
     </table>
-    <p style="margin-top: 15px;">&#x1F4B8; Toplam Stok Maliyeti (Devam Eden Aksiyonlar): <b>${(totalStockCostProgress / 1000).toFixed(2)} k€</b></p>
+
+    <p>Herhangi bir sorunuz olursa lütfen benimle iletişime geçmekten çekinmeyin. &#128588;</p>
   `;
 }
 
