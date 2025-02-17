@@ -1,7 +1,7 @@
 function sendEmails(simulation = false) {
   const sheetName = "1_Total Provision";
-  const emailColumn = "BD";
-  const ccColumn = "BE";
+  const emailColumn = "AZ";
+  const ccColumn = "BA";
   const ownerNameColumn = "R";
   const solutionColumn = "V";
   const referenceColumn = "A";
